@@ -54,12 +54,11 @@ class CarPoseVisualizer(object):
         self.car_models = OrderedDict([])
         logging.info('loading %d car models' % len(car_models.models))
         for model in car_models.models:
-            car_model = '%s/%s.pkl' % (self._data_config['car_model_dir'],
-                                       model.name)
-            with open(car_model) as f:
-                self.car_models[model.name] = pkl.load(f)
-                # fix the inconsistency between obj and pkl
-                self.car_models[model.name]['vertices'][:, [0, 1]] *= -1
+            car_model = '%s%s.pkl' % (self._data_config['car_model_dir'], model.name)
+            # This is a python 3 compatibility
+            self.car_models[model.name] = pkl.load(open(car_model, "rb") , encoding='latin1')
+            # fix the inconsistency between obj and pkl
+            self.car_models[model.name]['vertices'][:, [0, 1]] *= -1
 
     def render_car(self, pose, car_name):
         """Render a car instance given pose and car_name

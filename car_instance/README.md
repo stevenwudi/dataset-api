@@ -32,6 +32,11 @@ There are several scripts included with the dataset in a folder named `scripts`
  - `render_car_instances.py`  script for loading image and render image file
  - 'renderer/'      containing scripts of python wrapper for opengl render a car model from a 3d car mesh. We borrow portion of opengl rendering from [Displets](http://www.cvlibs.net/projects/displets/) and change to egl offscreen render context and python api.
  - `install.sh`     installation script of this library. Only tested for Ubuntu.
+                    Note: for the `eigen3, glew and egl` packages, try to install
+                    `sudo apt install libeigen3-dev`, 
+                    `sudo apt-get install libglfw3-dev libgles2-mesa-dev`, 
+                    `sudo apt-get install libglew-dev`
+
 
 The scripts can be installed by running install.sh in the bash:
 `sudo bash install.sh`
