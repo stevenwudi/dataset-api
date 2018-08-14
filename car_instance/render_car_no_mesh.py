@@ -3,6 +3,12 @@
     Author: wangpeng54@baidu.com
     Date: 2018/6/10
 """
+import matplotlib
+
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 import argparse
 import cv2
@@ -12,8 +18,6 @@ import numpy as np
 import json
 import pickle as pkl
 
-from matplotlib import pyplot as plt
-import renderer.render_egl as render
 import utils.utils as uts
 import utils.eval_utils as eval_uts
 import logging
@@ -25,7 +29,7 @@ logger.setLevel(logging.INFO)
 
 
 class CarPoseVisualizer(object):
-    def __init__(self, args=None, scale=0.4, linewidth=0.):
+    def __init__(self, args=None, scale=1.0, linewidth=0.):
         """Initializer
         Input:
             scale: whether resize the image in case image is too large
@@ -42,9 +46,7 @@ class CarPoseVisualizer(object):
         # must round prop to 4 due to renderer requirements
         # this will change the original size a bit, we usually need rescale
         # due to large image size
-        self.image_size = np.uint32(uts.round_prop_to(
-            np.float32([h * scale, w * scale])))
-
+        self.image_size = np.uint32(uts.round_prop_to(np.float32([h * scale, w * scale])))
         self.scale = scale
         self.linewidth = linewidth
         self.colors = np.random.random((self.MAX_INST_NUM, 3)) * 255
@@ -64,22 +66,42 @@ class CarPoseVisualizer(object):
             # fix the inconsistency between obj and pkl
             self.car_models[model.name]['vertices'][:, [0, 1]] *= -1
 
-    def render_car(self, pose, car_name):
+    # Draw delaunay triangles
+    def draw_delaunay(self, mask, imgpts, faces, delaunay_color=(0, 255, 0)):
+        for f in faces:
+            image_line = np.zeros(mask.shape)
+            pt1 = (imgpts[f[0] - 1, 0, 0], imgpts[f[0] - 1, 0, 1])
+            pt2 = (imgpts[f[1] - 1, 0, 0], imgpts[f[1] - 1, 0, 1])
+            pt3 = (imgpts[f[2] - 1, 0, 0], imgpts[f[2] - 1, 0, 1])
+            cv2.line(image_line, pt1, pt2, delaunay_color, 1)
+            cv2.line(image_line, pt2, pt3, delaunay_color, 1)
+            cv2.line(image_line, pt3, pt1, delaunay_color, 1)
+            mask = cv2.addWeighted(mask.astype(np.uint8), 1.0, image_line.astype(np.uint8), 0.1, 0)
+        return mask
+
+    def render_car(self, pose, car_name, im_shape):
         """Render a car instance given pose and car_name
         """
         car = self.car_models[car_name]
-        scale = np.ones((3,))
         pose = np.array(pose)
-        vert = uts.project(pose, scale, car['vertices'])
-        K = self.intrinsic
-        intrinsic = np.float64([K[0, 0], K[1, 1], K[0, 2], K[1, 2]])
-        depth, mask = render.renderMesh_py(np.float64(vert),
-                                           np.float64(car['faces']),
-                                           intrinsic,
-                                           self.image_size[0],
-                                           self.image_size[1],
-                                           np.float64(self.linewidth))
-        return depth, mask
+        # project 3D points to image plane
+        imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), pose[:3], pose[3:], self.intrinsic, distCoeffs=np.asarray([]))
+
+        # We will get the projection from the canvas
+        fig = Figure(figsize=(im_shape[1]/100, im_shape[0]/100), frameon=False)
+        canvas = FigureCanvas(fig)
+        w, h = fig.canvas.get_width_height()
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax = fig.gca()
+        ax.imshow(np.zeros(im_shape))
+        ax.triplot(imgpts[:, 0, 0], imgpts[:, 0, 1], car['faces'] - 1, color='g', alpha=0.3)
+        ax.axis('off')
+        canvas.draw()  # draw the canvas, cache the renderer
+        mask = np.fromstring(canvas.tostring_rgb(), dtype='uint8')
+        mask.shape = (h, w, 3)
+        return mask
 
     def compute_reproj_sim(self, car_names, out_file=None):
         """Compute the similarity matrix between every pair of cars.
@@ -134,8 +156,7 @@ class CarPoseVisualizer(object):
         """resize the image and intrinsic given a relative scale
         """
 
-        intrinsic_out = uts.intrinsic_vec_to_mat(intrinsic,
-                                                 self.image_size)
+        intrinsic_out = uts.intrinsic_vec_to_mat(intrinsic, self.image_size)
         hs, ws = self.image_size
         image_out = cv2.resize(image.copy(), (ws, hs))
 
@@ -159,27 +180,22 @@ class CarPoseVisualizer(object):
 
         intrinsic = self.dataset.get_intrinsic(image_name)
         image, self.intrinsic = self.rescale(image, intrinsic)
-
-        self.depth = self.MAX_DEPTH * np.ones(self.image_size)
-        self.mask = np.zeros(self.depth.shape)
-
+        im_shape = image.shape
+        mask_all = np.zeros(im_shape)
         for i, car_pose in enumerate(car_poses):
             car_name = car_models.car_id2name[car_pose['car_id']].name
-            depth, mask = self.render_car(car_pose['pose'], car_name)
-            self.mask, self.depth = self.merge_inst(depth, i + 1, self.mask, self.depth)
+            mask = self.render_car(car_pose['pose'], car_name, im_shape)
+            mask_all += mask
 
-        self.depth[self.depth == self.MAX_DEPTH] = -1.0
-        image = 0.5 * image
-        for i in range(len(car_poses)):
-            frame = np.float32(self.mask == i + 1)
-            frame = np.tile(frame[:, :, None], (1, 1, 3))
-            image = image + frame * 0.5 * self.colors[i, :]
-
-        uts.plot_images({'image_vis': np.uint8(image),
-                         'depth': self.depth, 'mask': self.mask},
-                        layout=[1, 3])
-
-        return image, self.mask, self.depth
+        mask_all = mask_all*200 / mask_all.max()
+        merged_image = cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), 0.8, 0)
+        fig = plt.figure(frameon=False)
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        ax.imshow(merged_image)
+        fig.savefig('/home/wudi/PycharmProjects/dataset-api-forked/dataset-api/car_instance/' + image_name + '.png', dpi=300)
+        return image
 
 
 class LabelResaver(object):
