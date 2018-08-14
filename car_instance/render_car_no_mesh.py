@@ -162,7 +162,7 @@ class CarPoseVisualizer(object):
 
         return image_out, intrinsic_out
 
-    def showAnn(self, image_name):
+    def showAnn(self, image_name, settings):
         """Show the annotation of a pose file in an image
         Input:
             image_name: the name of image
@@ -194,7 +194,8 @@ class CarPoseVisualizer(object):
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(merged_image)
-        fig.savefig('/home/wudi/PycharmProjects/dataset-api-forked/dataset-api/car_instance/' + image_name + '.png', dpi=300)
+        fig.savefig('/home/wudi/PycharmProjects/dataset-api-forked/dataset-api/car_instance/Outputs/imgs/' +
+                    settings + '/' + image_name + '.png', dpi=300)
         return image
 
 
