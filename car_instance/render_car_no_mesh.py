@@ -88,6 +88,7 @@ class CarPoseVisualizer(object):
         imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), pose[:3], pose[3:], self.intrinsic, distCoeffs=np.asarray([]))
 
         # We will get the projection from the canvas
+        plt.close('all')
         im_shape = image.shape
         fig = Figure(figsize=(im_shape[1]/100, im_shape[0]/100), frameon=False)
         canvas = FigureCanvas(fig)
