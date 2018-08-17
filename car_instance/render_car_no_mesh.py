@@ -4,7 +4,7 @@
     Date: 2018/6/10
 """
 import matplotlib
-
+from tqdm import tqdm
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -79,7 +79,7 @@ class CarPoseVisualizer(object):
             mask = cv2.addWeighted(mask.astype(np.uint8), 1.0, image_line.astype(np.uint8), 0.1, 0)
         return mask
 
-    def render_car(self, pose, car_name, im_shape):
+    def render_car(self, pose, car_name, image):
         """Render a car instance given pose and car_name
         """
         car = self.car_models[car_name]
@@ -88,6 +88,7 @@ class CarPoseVisualizer(object):
         imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), pose[:3], pose[3:], self.intrinsic, distCoeffs=np.asarray([]))
 
         # We will get the projection from the canvas
+        im_shape = image.shape
         fig = Figure(figsize=(im_shape[1]/100, im_shape[0]/100), frameon=False)
         canvas = FigureCanvas(fig)
         w, h = fig.canvas.get_width_height()
@@ -101,6 +102,22 @@ class CarPoseVisualizer(object):
         canvas.draw()  # draw the canvas, cache the renderer
         mask = np.fromstring(canvas.tostring_rgb(), dtype='uint8')
         mask.shape = (h, w, 3)
+        return mask
+
+    def render_car_cv2(self, pose, car_name, image):
+        """Render a car instance given pose and car_name
+        """
+        car = self.car_models[car_name]
+        pose = np.array(pose)
+        # project 3D points to 2d image plane
+        imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), pose[:3], pose[3:], self.intrinsic, distCoeffs=np.asarray([]))
+
+        mask = np.zeros(image.shape)
+        for face in car['faces'] - 1:
+            pts = np.array([[imgpts[idx, 0, 0], imgpts[idx, 0, 1]] for idx in face], np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(mask, [pts], True, (0, 255, 0))
+
         return mask
 
     def compute_reproj_sim(self, car_names, out_file=None):
@@ -180,22 +197,26 @@ class CarPoseVisualizer(object):
 
         intrinsic = self.dataset.get_intrinsic(image_name)
         image, self.intrinsic = self.rescale(image, intrinsic)
-        im_shape = image.shape
-        mask_all = np.zeros(im_shape)
+
+        merged_image = image.copy()
+        mask_all = np.zeros(image.shape)
         for i, car_pose in enumerate(car_poses):
             car_name = car_models.car_id2name[car_pose['car_id']].name
-            mask = self.render_car(car_pose['pose'], car_name, im_shape)
+            mask = self.render_car_cv2(car_pose['pose'], car_name, image)
             mask_all += mask
 
-        mask_all = mask_all*200 / mask_all.max()
-        merged_image = cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), 0.8, 0)
-        fig = plt.figure(frameon=False)
+        mask_all = mask_all * 255 / mask_all.max()
+
+        alpha = 0.5
+        cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), 1 - alpha, 0, merged_image)
+        im_shape = image.shape
+        fig = plt.figure(frameon=False, figsize=(im_shape[1]/100, im_shape[0]/100))
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(merged_image)
-        fig.savefig('/home/wudi/PycharmProjects/dataset-api-forked/dataset-api/car_instance/Outputs/imgs/' +
-                    settings + '/' + image_name + '.png', dpi=300)
+        fig.savefig('/media/samsumg_1tb/ApolloScape/ECCV2018_apollo/3d_car_instance_sample/Outputs/' +
+                    settings + '/' + image_name + '.png', dpi=100)
         return image
 
 

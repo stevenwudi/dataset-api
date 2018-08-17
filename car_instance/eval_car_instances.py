@@ -19,8 +19,8 @@ from collections import namedtuple
 Criterion = namedtuple('Criterion', [
     'shapeSim',  # Criterion for shape similarity
     'transDis',  # thresholds for translation
-    'oriDis',    # thresholds for orientation
-    ])
+    'oriDis',  # thresholds for orientation
+])
 
 
 class Detect3DEval(object):
@@ -69,13 +69,13 @@ class Detect3DEval(object):
             print('simType not specified. use default simType ')
 
         self.args = args
-        self.evalImgs = defaultdict(list)   # per-image per-category evaluation results [KxAxI] elements
-        self.evalRes = {}               # accumulated evaluation results
-        self._gts = defaultdict(list)       # gt for evaluation
-        self._dts = defaultdict(list)       # dt for evaluation
-        self._paramsEval = {}               # parameters for evaluation
-        self.stats = []                     # result summarization
-        self.sims = {}                      # sims between all gts and dts
+        self.evalImgs = defaultdict(list)  # per-image per-category evaluation results [KxAxI] elements
+        self.evalRes = {}  # accumulated evaluation results
+        self._gts = defaultdict(list)  # gt for evaluation
+        self._dts = defaultdict(list)  # dt for evaluation
+        self._paramsEval = {}  # parameters for evaluation
+        self.stats = []  # result summarization
+        self.sims = {}  # sims between all gts and dts
 
         self.image_list = self._checker(args.test_dir, args.gt_dir)
         self.params = Params(simType=args.simType)
@@ -96,8 +96,8 @@ class Detect3DEval(object):
         Prepare ._gts and ._dts for evaluation based on params
         :return: None
         '''
-        self._gts = {}       # gt for evaluation
-        self._dts = {}       # dt for evaluation
+        self._gts = {}  # gt for evaluation
+        self._dts = {}  # dt for evaluation
         print('loading results')
         count_gt = 1
         count_dt = 1
@@ -119,8 +119,8 @@ class Detect3DEval(object):
             self._dts[image_name] = car_poses_dt
 
         self.params.image_names = self.image_list
-        self.evalImgs = defaultdict(list)   # per-image per-category evaluation results
-        self.evalRes  = {}                  # accumulated evaluation results
+        self.evalImgs = defaultdict(list)  # per-image per-category evaluation results
+        self.evalRes = {}  # accumulated evaluation results
 
     def evaluate(self):
         '''
@@ -138,17 +138,16 @@ class Detect3DEval(object):
         self._prepare()
         if p.simType == '3dpose':
             compute_sim = self.compute_sim
-        self.sims = {image_name: compute_sim(image_name)
-                     for image_name in self.image_list}
+        self.sims = {image_name: compute_sim(image_name) for image_name in self.image_list}
 
         maxDet = p.maxDets[-1]
         self.evalImgs = [self.evaluate_image(image_name, areaRng, maxDet)
-                 for areaRng in p.areaRng
-                 for image_name in p.image_names
-             ]
+                         for areaRng in p.areaRng
+                         for image_name in p.image_names
+                         ]
         self._paramsEval = copy.deepcopy(self.params)
         toc = time.time()
-        print('DONE (t={:0.2f}s).'.format(toc-tic))
+        print('DONE (t={:0.2f}s).'.format(toc - tic))
 
     def compute_sim(self, image_name):
         """Compute similarity for an image between ground truth and detected results
@@ -159,7 +158,7 @@ class Detect3DEval(object):
 
         if len(gt) == 0 and len(dt) == 0:
             return []
-        inds = np.argsort([-d['score'] for d in dt], kind = 'mergesort')
+        inds = np.argsort([-d['score'] for d in dt], kind='mergesort')
         dt = [dt[i] for i in inds]
         if len(dt) > p.maxDets[-1]:
             dt = dt[0:p.maxDets[-1]]
@@ -191,11 +190,11 @@ class Detect3DEval(object):
         p = self.params
         gt = self._gts[image_name]
         dt = self._dts[image_name]
-        if len(gt) == 0 and len(dt) ==0:
+        if len(gt) == 0 and len(dt) == 0:
             return None
 
         for g in gt:
-            if g['ignore'] or (g['area']<aRng[0] or g['area']>aRng[1]):
+            if g['ignore'] or (g['area'] < aRng[0] or g['area'] > aRng[1]):
                 g['_ignore'] = 1
             else:
                 g['_ignore'] = 0
@@ -207,19 +206,17 @@ class Detect3DEval(object):
         dt = [dt[i] for i in dtind[0:maxDet]]
 
         # load computed sims
-        sims = self.sims[image_name][:, gtind, :] if len(
-                self.sims[image_name]) > 0 \
-                else self.sims[image_name]
+        sims = self.sims[image_name][:, gtind, :] if len(self.sims[image_name]) > 0 else self.sims[image_name]
 
         # number of criterion
         T = len(p.shapeThrs)
         G = len(gt)
         D = len(dt)
 
-        gtm  = np.zeros((T, G)) # match of gt
-        dtm  = np.zeros((T, D)) # match of detection
-        gtIg = np.array([g['_ignore'] for g in gt]) # ignore gt index
-        dtIg = np.zeros((T, D)) # detection ignore
+        gtm = np.zeros((T, G))  # match of gt
+        dtm = np.zeros((T, D))  # match of detection
+        gtIg = np.array([g['_ignore'] for g in gt])  # ignore gt index
+        dtIg = np.zeros((T, D))  # detection ignore
 
         # finding matches between detections & ground truth
         if not len(sims) == 0:
@@ -227,17 +224,17 @@ class Detect3DEval(object):
                 cur_cri = cri
                 for dind, d in enumerate(dt):
                     # information about best match so far (m=-1 -> unmatched)
-                    m   = -1
+                    m = -1
                     for gind, g in enumerate(gt):
                         # if this gt already matched, continue
-                        if gtm[tind, gind]>0:
+                        if gtm[tind, gind] > 0:
                             continue
                         # if dt matched to reg gt, and on ignore gt, stop
                         if m > -1 and gtIg[m] == 0 and gtIg[gind] == 1:
                             break
 
                         # continue to next gt unless better match made
-                        if not _satisfy(sims[dind, gind],  cur_cri):
+                        if not _satisfy(sims[dind, gind], cur_cri):
                             continue
                         # if match successful and best so far, store appropriately
                         cur_match = sims[dind, gind]
@@ -250,29 +247,28 @@ class Detect3DEval(object):
                         continue
 
                     dtIg[tind, dind] = gtIg[m]
-                    gtm[tind, m]     = d['id']
-                    dtm[tind, dind]  = gt[m]['id']
+                    gtm[tind, m] = d['id']
+                    dtm[tind, dind] = gt[m]['id']
 
         # set unmatched detections outside of area range to ignore
-        a = np.array([d['area'] < aRng[0] or d['area'] > aRng[1] \
-                for d in dt]).reshape((1, len(dt)))
-        dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
+        a = np.array([d['area'] < aRng[0] or d['area'] > aRng[1] for d in dt]).reshape((1, len(dt)))
+        dtIg = np.logical_or(dtIg, np.logical_and(dtm == 0, np.repeat(a, T, 0)))
 
         # store results for given image and category
         return {
-                'image_id':     image_name,
-                'aRng':         aRng,
-                'maxDet':       maxDet,
-                'dtIds':        [d['id'] for d in dt],
-                'gtIds':        [g['id'] for g in gt],
-                'dtMatches':    dtm,
-                'gtMatches':    gtm,
-                'dtScores':     [d['score'] for d in dt],
-                'gtIgnore':     gtIg,
-                'dtIgnore':     dtIg,
-            }
+            'image_id': image_name,
+            'aRng': aRng,
+            'maxDet': maxDet,
+            'dtIds': [d['id'] for d in dt],
+            'gtIds': [g['id'] for g in gt],
+            'dtMatches': dtm,
+            'gtMatches': gtm,
+            'dtScores': [d['score'] for d in dt],
+            'gtIgnore': gtIg,
+            'dtIgnore': dtIg,
+        }
 
-    def accumulate(self, p = None):
+    def accumulate(self, p=None):
         ''' Accumulate per image evaluation results and store the result in self.eval
 
         Inputs:
@@ -287,14 +283,14 @@ class Detect3DEval(object):
         if p is None:
             p = self.params
         p.catIds = p.catIds if p.useCats == 1 else [-1]
-        T           = len(p.simThrs)                       # number of thresh
-        R           = len(p.recThrs)                       # number of recall thresh
-        K           = len(p.catIds) if p.useCats else 1    # number of categories
-        A           = len(p.areaRng)                       # number of area scale
-        M           = len(p.maxDets)                       # number of max detections per image
-        precision   = -np.ones((T, R, K, A, M)) # -1 for the precision of absent categories
-        recall      = -np.ones((T, K, A, M))
-        scores      = -np.ones((T, R, K, A, M))
+        T = len(p.simThrs)  # number of thresh
+        R = len(p.recThrs)  # number of recall thresh
+        K = len(p.catIds) if p.useCats else 1  # number of categories
+        A = len(p.areaRng)  # number of area scale
+        M = len(p.maxDets)  # number of max detections per image
+        precision = -np.ones((T, R, K, A, M))  # -1 for the precision of absent categories
+        recall = -np.ones((T, K, A, M))
+        scores = -np.ones((T, R, K, A, M))
 
         # create dictionary for future indexing
         _pe = self._paramsEval
@@ -302,13 +298,13 @@ class Detect3DEval(object):
         setK = set(catIds)
         setA = set(map(tuple, _pe.areaRng))
         setM = set(_pe.maxDets)
-        setI = set(range(len(_pe.image_names))) # can use to select image ids
+        setI = set(range(len(_pe.image_names)))  # can use to select image ids
 
         # get inds to evaluate
-        k_list = [n for n, k in enumerate(p.catIds)  if k in setK]
+        k_list = [n for n, k in enumerate(p.catIds) if k in setK]
         m_list = [m for n, m in enumerate(p.maxDets) if m in setM]
         a_list = [n for n, a in enumerate(map(lambda x: tuple(x), p.areaRng)) if a in setA]
-        i_list = [n for n, i in enumerate(range(len(p.image_names)))  if i in setI]
+        i_list = [n for n, i in enumerate(range(len(p.image_names))) if i in setI]
         A0 = len(_pe.areaRng)
         I0 = len(_pe.image_names)
 
@@ -329,15 +325,15 @@ class Detect3DEval(object):
                     inds = np.argsort(-dtScores, kind='mergesort')
                     dtScoresSorted = dtScores[inds]
 
-                    dtm  = np.concatenate([e['dtMatches'][:,0:maxDet] for e in E], axis=1)[:, inds]
-                    dtIg = np.concatenate([e['dtIgnore'][:,0:maxDet]  for e in E], axis=1)[:, inds]
+                    dtm = np.concatenate([e['dtMatches'][:, 0:maxDet] for e in E], axis=1)[:, inds]
+                    dtIg = np.concatenate([e['dtIgnore'][:, 0:maxDet] for e in E], axis=1)[:, inds]
                     gtIg = np.concatenate([e['gtIgnore'] for e in E])
-                    npig = np.count_nonzero(gtIg==0 )
+                    npig = np.count_nonzero(gtIg == 0)
 
                     if npig == 0:
                         continue
-                    tps = np.logical_and(               dtm,  np.logical_not(dtIg) )
-                    fps = np.logical_and(np.logical_not(dtm), np.logical_not(dtIg) )
+                    tps = np.logical_and(dtm, np.logical_not(dtIg))
+                    fps = np.logical_and(np.logical_not(dtm), np.logical_not(dtIg))
 
                     tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float)
                     fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float)
@@ -347,20 +343,21 @@ class Detect3DEval(object):
                         nd = len(tp)
                         rc = tp / npig
                         pr = tp / (fp + tp + np.spacing(1))
-                        q  = np.zeros((R, ))
-                        ss = np.zeros((R, ))
+                        q = np.zeros((R,))
+                        ss = np.zeros((R,))
 
                         if nd:
-                            recall[t,k,a,m] = rc[-1]
+                            recall[t, k, a, m] = rc[-1]
                         else:
-                            recall[t,k,a,m] = 0
+                            recall[t, k, a, m] = 0
 
                         # numpy is slow without cython optimization for accessing elements
                         # use python array gets significant speed improvement
-                        pr = pr.tolist(); q = q.tolist()
-                        for i in range(nd-1, 0, -1):
-                            if pr[i] > pr[i-1]:
-                                pr[i-1] = pr[i]
+                        pr = pr.tolist()
+                        q = q.tolist()
+                        for i in range(nd - 1, 0, -1):
+                            if pr[i] > pr[i - 1]:
+                                pr[i - 1] = pr[i]
 
                         inds = np.searchsorted(rc, p.recThrs, side='left')
                         try:
@@ -376,18 +373,19 @@ class Detect3DEval(object):
             'counts': [T, R, K, A, M],
             'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'precision': precision,
-            'recall':   recall,
+            'recall': recall,
             'scores': scores,
         }
         toc = time.time()
-        print('DONE (t={:0.2f}s).'.format( toc-tic))
+        print('DONE (t={:0.2f}s).'.format(toc - tic))
 
     def summarize(self):
         '''
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
         '''
-        def _summarize(ap=1, simThr=None, areaRng='all', maxDets=100, f=None):
+
+        def _summarize(ap=1, simThr=None, areaRng='all', maxDets=100):
             """Summarize an evaluation
             Input:
                 ap: whether ask for average precision (ap = 1) or average recall.
@@ -400,7 +398,7 @@ class Detect3DEval(object):
             p = self.params
             iStr = ' {:<18} {} @[ Criteria={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
             titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
-            typeStr = '(AP)' if ap==1 else '(AR)'
+            typeStr = '(AP)' if ap == 1 else '(AR)'
             simstr = 'c0:c5' if simThr is None else simThr
 
             if not areaRng in p.areaRngLbl:
@@ -417,25 +415,24 @@ class Detect3DEval(object):
                     t = [p.simThrs.index(simThr)]
                     s = s[t]
                 s = s[:, :, :, aind, mind]
-
             else:
                 # dimension of recall: [TxKxAxM]
                 s = self.evalRes['recall']
                 if simThr is not None:
                     t = p.simThrs.index(simThr)
                     s = s[t]
-                s = s[:,:,aind,mind]
+                s = s[:, :, aind, mind]
 
-            if len(s[s>-1])==0:
+            if len(s[s > -1]) == 0:
                 mean_s = -1
             else:
-                mean_s = np.mean(s[s>-1])
+                mean_s = np.mean(s[s > -1])
             print(iStr.format(titleStr, typeStr, simstr, areaRng, maxDets, mean_s))
             return mean_s
 
         def _summarizeDets():
             out_names = ['AP', 'AP_c0', 'AP_c3', 'AP_s', 'AP_m', 'AP_l', 'AR_1',
-                    'AR_10', 'AR_100', 'AR_s', 'AR_m', 'AR_l']
+                         'AR_10', 'AR_100', 'AR_s', 'AR_m', 'AR_l']
 
             stats = np.zeros(12)
             stats[0] = _summarize(1)
@@ -475,6 +472,7 @@ class Params(object):
     Inputs:
         simType: currently only '3dpose' is supported. Later we may add '3dbbox' for eval
     """
+
     def __init__(self, simType='3dpose'):
         if simType == '3dpose':
             self.set_det_params()
@@ -500,31 +498,23 @@ class Params(object):
 
         self.recThrs = np.linspace(.0, 1.00, np.round((1.00 - .0) / .01) + 1, endpoint=True)
         # from loss to strict criterion
-        self.criteria = [Criterion(self.shapeThrs[i], self.transThrs[i], \
-                self.oriThrs[i]) for i in range(self.criterion_num)]
+        self.criteria = [Criterion(self.shapeThrs[i], self.transThrs[i],
+                                   self.oriThrs[i]) for i in range(self.criterion_num)]
 
         self.maxDets = [1, 10, 100]
-        self.areaRng = [[0 ** 2, 1e5 ** 2], [0 ** 2, 64 ** 2], \
-                [64 ** 2, 192 ** 2], [192 ** 2, 1e5 ** 2]]
+        self.areaRng = [[0 ** 2, 1e5 ** 2], [0 ** 2, 64 ** 2], [64 ** 2, 192 ** 2], [192 ** 2, 1e5 ** 2]]
         self.areaRngLbl = ['all', 'small', 'medium', 'large']
-
         self.useCats = 0
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Evaluation self 3d car detection.')
-    parser.add_argument('--test_dir', default='./test_eval_data/det3d_res/',
-                        help='the dir of results')
-    parser.add_argument('--gt_dir', default='./test_eval_data/det3d_gt/',
-                        help='the dir of ground truth')
-    parser.add_argument('--res_file', default='./test_eval_data/res.txt',
-                        help='the dir of ground truth')
-    parser.add_argument('--simType', default=None,
-                        help='the type of evalution metric, default 3dpose')
+    parser = argparse.ArgumentParser(description='Evaluation self 3d car detection.')
+    parser.add_argument('--test_dir', default='./test_eval_data/det3d_res/', help='the dir of results')
+    parser.add_argument('--gt_dir', default='./test_eval_data/det3d_gt/', help='the dir of ground truth')
+    parser.add_argument('--res_file', default='./test_eval_data/res.txt', help='the dir of ground truth')
+    parser.add_argument('--simType', default=None, help='the type of evalution metric, default 3dpose')
     args = parser.parse_args()
     det_3d_metric = Detect3DEval(args)
     det_3d_metric.evaluate()
     det_3d_metric.accumulate()
     det_3d_metric.summarize()
-
