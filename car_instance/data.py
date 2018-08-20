@@ -17,8 +17,7 @@ class ApolloScape(object):
     def get_3d_car_config(self):
         """get configuration of the dataset for 3d car understanding
         """
-        ROOT = self._data_dir + '3d_car_instance/' if self._args is None else \
-            self._args.data_dir
+        ROOT = self._data_dir + '3d_car_instance/' if self._args is None else self._args.data_dir
 
         self._data_config['image_dir'] = ROOT + 'images/'
         self._data_config['pose_dir'] = ROOT + 'car_poses/'

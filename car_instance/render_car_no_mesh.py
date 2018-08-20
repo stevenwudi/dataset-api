@@ -4,12 +4,10 @@
     Date: 2018/6/10
 """
 import matplotlib
-from tqdm import tqdm
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 
+import os
 import argparse
 import cv2
 import car_models
@@ -21,7 +19,6 @@ import pickle as pkl
 import utils.utils as uts
 import utils.eval_utils as eval_uts
 import logging
-
 from collections import OrderedDict
 
 logger = logging.getLogger()
@@ -51,6 +48,10 @@ class CarPoseVisualizer(object):
         self.linewidth = linewidth
         self.colors = np.random.random((self.MAX_INST_NUM, 3)) * 255
 
+    def set_dataset(self, args):
+        self.dataset = data.ApolloScape(args)
+        self._data_config = self.dataset.get_3d_car_config()
+
     def load_car_models(self):
         """Load all the car models
         """
@@ -65,45 +66,8 @@ class CarPoseVisualizer(object):
             self.car_models[model.name] = pkl.load(open(car_model, "rb"), encoding='latin1')
             # fix the inconsistency between obj and pkl
             self.car_models[model.name]['vertices'][:, [0, 1]] *= -1
-
-    # Draw delaunay triangles
-    def draw_delaunay(self, mask, imgpts, faces, delaunay_color=(0, 255, 0)):
-        for f in faces:
-            image_line = np.zeros(mask.shape)
-            pt1 = (imgpts[f[0] - 1, 0, 0], imgpts[f[0] - 1, 0, 1])
-            pt2 = (imgpts[f[1] - 1, 0, 0], imgpts[f[1] - 1, 0, 1])
-            pt3 = (imgpts[f[2] - 1, 0, 0], imgpts[f[2] - 1, 0, 1])
-            cv2.line(image_line, pt1, pt2, delaunay_color, 1)
-            cv2.line(image_line, pt2, pt3, delaunay_color, 1)
-            cv2.line(image_line, pt3, pt1, delaunay_color, 1)
-            mask = cv2.addWeighted(mask.astype(np.uint8), 1.0, image_line.astype(np.uint8), 0.1, 0)
-        return mask
-
-    def render_car(self, pose, car_name, image):
-        """Render a car instance given pose and car_name
-        """
-        car = self.car_models[car_name]
-        pose = np.array(pose)
-        # project 3D points to image plane
-        imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), pose[:3], pose[3:], self.intrinsic, distCoeffs=np.asarray([]))
-
-        # We will get the projection from the canvas
-        plt.close('all')
-        im_shape = image.shape
-        fig = Figure(figsize=(im_shape[1]/100, im_shape[0]/100), frameon=False)
-        canvas = FigureCanvas(fig)
-        w, h = fig.canvas.get_width_height()
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax = fig.gca()
-        ax.imshow(np.zeros(im_shape))
-        ax.triplot(imgpts[:, 0, 0], imgpts[:, 0, 1], car['faces'] - 1, color='g', alpha=0.3)
-        ax.axis('off')
-        canvas.draw()  # draw the canvas, cache the renderer
-        mask = np.fromstring(canvas.tostring_rgb(), dtype='uint8')
-        mask.shape = (h, w, 3)
-        return mask
+            # print("Vertice number is: %d" % len(self.car_models[model.name]['vertices']))
+            # print("Face number is: %d" % len(self.car_models[model.name]['faces']))
 
     def render_car_cv2(self, pose, car_name, image):
         """Render a car instance given pose and car_name
@@ -111,7 +75,9 @@ class CarPoseVisualizer(object):
         car = self.car_models[car_name]
         pose = np.array(pose)
         # project 3D points to 2d image plane
-        imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), pose[:3], pose[3:], self.intrinsic, distCoeffs=np.asarray([]))
+        rmat = uts.euler_angles_to_rotation_matrix(pose[:3])
+        rvect, _ = cv2.Rodrigues(rmat)
+        imgpts, jac = cv2.projectPoints(np.float32(car['vertices']), rvect, pose[3:], self.intrinsic, distCoeffs=None)
 
         mask = np.zeros(image.shape)
         for face in car['faces'] - 1:
@@ -180,7 +146,7 @@ class CarPoseVisualizer(object):
 
         return image_out, intrinsic_out
 
-    def showAnn(self, image_name, settings):
+    def showAnn(self, image_name, settings, save_dir, alpha=0.8):
         """Show the annotation of a pose file in an image
         Input:
             image_name: the name of image
@@ -197,7 +163,7 @@ class CarPoseVisualizer(object):
         image = cv2.imread(image_file, cv2.IMREAD_UNCHANGED)[:, :, ::-1]
 
         intrinsic = self.dataset.get_intrinsic(image_name)
-        image, self.intrinsic = self.rescale(image, intrinsic)
+        self.intrinsic = uts.intrinsic_vec_to_mat(intrinsic)
 
         merged_image = image.copy()
         mask_all = np.zeros(image.shape)
@@ -207,17 +173,22 @@ class CarPoseVisualizer(object):
             mask_all += mask
 
         mask_all = mask_all * 255 / mask_all.max()
+        cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
 
-        alpha = 0.5
-        cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), 1 - alpha, 0, merged_image)
-        im_shape = image.shape
-        fig = plt.figure(frameon=False, figsize=(im_shape[1]/100, im_shape[0]/100))
+        # Save figure
+        plt.close('all')
+        fig = plt.figure(frameon=False)
+        fig.set_size_inches(image.shape[1], image.shape[0])
         ax = plt.Axes(fig, [0., 0., 1., 1.])
         ax.set_axis_off()
         fig.add_axes(ax)
         ax.imshow(merged_image)
-        fig.savefig('/media/samsumg_1tb/ApolloScape/ECCV2018_apollo/3d_car_instance_sample/Outputs/' +
-                    settings + '/' + image_name + '.png', dpi=100)
+
+        save_set_dir = os.path.join(save_dir, settings)
+        if not os.path.exists(save_set_dir):
+            os.mkdir(save_set_dir)
+        fig.savefig(os.path.join(save_dir, settings, image_name + '.png'), dpi=1)
+
         return image
 
 
@@ -288,13 +259,11 @@ class LabelResaver(object):
             depth, mask = self.visualizer.render_car(car_pose['pose'], car_name)
             self.mask, self.depth = self.visualizer.merge_inst(
                 depth, i + 1, self.mask, self.depth)
-            vis_rate[i] = np.float32(np.sum(mask == (i + 1))) / (
-                np.float32(np.sum(mask)) + np.spacing(1))
+            vis_rate[i] = np.float32(np.sum(mask == (i + 1))) / (np.float32(np.sum(mask)) + np.spacing(1))
 
         keep_idx = []
         for i, car_pose in enumerate(car_poses):
-            area = np.round(np.float32(np.sum(
-                self.mask == (i + 1))) / (self.visualizer.scale ** 2))
+            area = np.round(np.float32(np.sum(self.mask == (i + 1))) / (self.visualizer.scale ** 2))
             if area > 1:
                 keep_idx.append(i)
 
