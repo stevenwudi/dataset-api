@@ -33,13 +33,13 @@ class ApolloScape(object):
                 [2300.39065314361, 2301.31478860597,
                  1713.21615190657, 1342.91100799715])}
 
-        # normalized intrinsic
-        cam_names = self._data_config['intrinsic'].keys()
-        for c_name in cam_names:
-            self._data_config['intrinsic'][c_name][[0, 2]] /= \
-                self._data_config['image_size'][1]
-            self._data_config['intrinsic'][c_name][[1, 3]] /= \
-                self._data_config['image_size'][0]
+        # normalized intrinsic --No!
+        # cam_names = self._data_config['intrinsic'].keys()
+        # for c_name in cam_names:
+        #     self._data_config['intrinsic'][c_name][[0, 2]] /= \
+        #         self._data_config['image_size'][1]
+        #     self._data_config['intrinsic'][c_name][[1, 3]] /= \
+        #         self._data_config['image_size'][0]
         self._data_config['car_model_dir'] = ROOT + 'car_models/'
 
         return self._data_config
