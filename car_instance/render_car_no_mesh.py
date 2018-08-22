@@ -48,6 +48,8 @@ class CarPoseVisualizer(object):
         self.linewidth = linewidth
         self.colors = np.random.random((self.MAX_INST_NUM, 3)) * 255
 
+        self.car_counts = {}
+
     def set_dataset(self, args):
         self.dataset = data.ApolloScape(args)
         self._data_config = self.dataset.get_3d_car_config()
@@ -162,7 +164,9 @@ class CarPoseVisualizer(object):
         image_file = '%s/%s.jpg' % (self._data_config['image_dir'], image_name)
         image = cv2.imread(image_file, cv2.IMREAD_UNCHANGED)[:, :, ::-1]
 
-        intrinsic = self.dataset.get_intrinsic(image_name)
+        #intrinsic = self.dataset.get_intrinsic(image_name)
+        ### we use only camera5 intrinsics
+        intrinsic = self.dataset.get_intrinsic("Camera_5")
         self.intrinsic = uts.intrinsic_vec_to_mat(intrinsic)
 
         merged_image = image.copy()
@@ -190,6 +194,59 @@ class CarPoseVisualizer(object):
         fig.savefig(os.path.join(save_dir, settings, image_name + '.png'), dpi=1)
 
         return image
+
+    def findCarModels(self, image_name):
+        """accumuate the areas of cars in an image
+        Input:
+            image_name: the name of image
+        Output:
+
+        """
+        car_pose_file = '%s/%s.json' % (self._data_config['pose_dir'], image_name)
+        with open(car_pose_file) as f:
+            car_poses = json.load(f)
+        car_id = []
+        for pose in car_poses:
+            car_id.append(pose['car_id'])
+            car_name = car_models.car_id2name[pose['car_id']].name
+
+            if pose['car_id'] in self.car_counts.keys():
+                self.car_counts[pose['car_id']]['car_counts']  += 1
+            else:
+                self.car_counts[pose['car_id']] = {}
+                self.car_counts[pose['car_id']]['car_name'] = car_name
+                self.car_counts[pose['car_id']]['car_counts'] = 0
+        return car_id
+
+    def findArea(self, image_name):
+        """accumuate the areas of cars in an image
+        Input:
+            image_name: the name of image
+        Output:
+
+        """
+        car_pose_file = '%s/%s.json' % (self._data_config['pose_dir'], image_name)
+        with open(car_pose_file) as f:
+            car_poses = json.load(f)
+        areas = []
+        for pose in car_poses:
+            areas.append(pose['area'])
+        return areas
+
+    def collect_pose(self, image_name):
+        """accumuate the pose of cars in an image
+        Input:
+            image_name: the name of image
+        Output:
+
+        """
+        car_pose_file = '%s/%s.json' % (self._data_config['pose_dir'], image_name)
+        with open(car_pose_file) as f:
+            car_poses = json.load(f)
+        areas = []
+        for pose in car_poses:
+            areas.append(pose['pose'])
+        return areas
 
 
 class LabelResaver(object):
