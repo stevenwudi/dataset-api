@@ -245,7 +245,8 @@ class CarPoseVisualizer(object):
             car_poses = json.load(f)
         areas = []
         for pose in car_poses:
-            areas.append(pose['pose'])
+            quaternions = uts.euler_angles_to_quaternions(np.array(pose['pose'][:3]))
+            areas.append(np.concatenate((np.array(pose['pose']), quaternions[0])))
         return areas
 
 
