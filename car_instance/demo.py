@@ -63,15 +63,17 @@ if True:
     poses_array = [np.vstack(p) for p in poses]
     poses_array = np.array(np.vstack(poses_array))
     for i in range(poses_array.shape[1]):
-        print(poses_array[:, i].min(), poses_array[:, i].max())
+        print(poses_array[:, i].min(), poses_array[:, i].max(), poses_array[:, i].mean(), poses_array[:, i].std())
 
     """
-    -3.14052 3.14085
-    -1.55991 1.55723
-    -3.14159 3.14158
-    -145.807 518.745
-    -0.982025 689.119
-    1.5389 3493.44
+       min        max        mean       std
+    -3.14052    3.14085     1.1784      1.3378
+    -1.55991    1.55723     0.0298      0.4886      
+    -3.14159    3.14158     -1.323      2.0161
+    -145.807    518.745     -3.756      15.005
+    -0.982025   689.119     9.9432      7.0902
+    1.5389      3493.44     54.044      41.8559
+
     """
 
 ### Find the area ######
