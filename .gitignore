@@ -4,6 +4,7 @@
 apolloscape
 *.so
 
+.idea
 car_instance/.ipynb_checkpoints/
 car_instance/renderer/build/
 car_instance/renderer/*

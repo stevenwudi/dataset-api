@@ -4,7 +4,7 @@
     Date: 2018/6/10
 """
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 import os
@@ -194,6 +194,119 @@ class CarPoseVisualizer(object):
         fig.savefig(os.path.join(save_dir, settings, image_name + '.png'), dpi=1)
 
         return image
+
+    def findTrans(self, image_name):
+        """Show the annotation of a pose file in an image
+        Input:
+            image_name: the name of image
+        Output:
+            depth: a rendered depth map of each car
+            masks: an instance mask of the label
+            image_vis: an image show the overlap of car model and image
+        """
+
+        car_pose_file = '%s/%s.json' % (self._data_config['pose_dir'], image_name)
+        with open(car_pose_file) as f:
+            car_poses = json.load(f)
+        image_file = '%s/%s.jpg' % (self._data_config['image_dir'], image_name)
+        image = cv2.imread(image_file, cv2.IMREAD_UNCHANGED)[:, :, ::-1]
+
+        #intrinsic = self.dataset.get_intrinsic(image_name)
+        ### we use only camera5 intrinsics
+        intrinsic = self.dataset.get_intrinsic("Camera_5")
+        self.intrinsic = uts.intrinsic_vec_to_mat(intrinsic)
+
+        merged_image = image.copy()
+
+        dis_trans_all = []
+        for car_pose in car_poses:
+            car_name = car_models.car_id2name[car_pose['car_id']].name
+
+            car = self.car_models[car_name]
+            pose = np.array(car_pose['pose'])
+            # project 3D points to 2d image plane
+            rmat = uts.euler_angles_to_rotation_matrix(pose[:3])
+
+            x_y_z_R = np.matmul(rmat, np.transpose(np.float32(car['vertices'])))
+            x_y_z = x_y_z_R + pose[3:][:, None]
+            x2 = x_y_z[0]/x_y_z[2]
+            y2 = x_y_z[1]/x_y_z[2]
+            u = intrinsic[0] * x2 + intrinsic[2]
+            v = intrinsic[1] * y2 + intrinsic[3]
+
+            ###
+            fx = intrinsic[0]
+            fy = intrinsic[1]
+            cx = intrinsic[2]
+            cy = intrinsic[3]
+
+            xc = ((u.max() + u.min())/2 - cx) / fx
+            yc = ((v.max() + v.min())/2 - cy) / fy
+            ymin = (v.min() - cy) / fy
+            ymax= (v.max() - cy) / fy
+            Rymin = x_y_z_R[1, :].min()
+            Rymax = x_y_z_R[1, :].max()
+
+            Rxc = x_y_z_R[0, :].mean()
+            Ryc = x_y_z_R[1, :].mean()
+            Rzc = x_y_z_R[2, :].mean()
+
+            # Rxc = 0
+            # Ryc = 0
+            # Rzc = 0
+            # Rxc = (x_y_z_R[0, :].max() + x_y_z_R[0, :].min())/2
+            # Ryc = (x_y_z_R[1, :].max() + x_y_z_R[1, :].min())/2
+            # Rzc = (x_y_z_R[2, :].max() + x_y_z_R[2, :].min())/2
+            # Because the car highest point happened in the center!
+            #zc = (Ryc - Rymin) / (yc - ymin)
+            zc = (Ryc - Rymax) / (yc - ymax)
+
+            xt = zc * xc - Rxc
+            yt = zc * yc - Ryc
+            zt = zc - Rzc
+            pred_pose = np.array([xt, yt, zt])
+            dis_trans = np.linalg.norm(pred_pose - pose[3:])
+
+            # pose_pred_all = np.concatenate([car_pose['pose'][:3], pred_pose])
+            # mask = self.render_car_cv2(pose_pred_all, car_name, image)
+            # cv2.addWeighted(image.astype(np.uint8), 1.0, mask.astype(np.uint8), 0.5, 0, merged_image)
+            # plt.imshow(merged_image)
+
+            print(dis_trans)
+            dis_trans_all.append(dis_trans)
+
+        return dis_trans_all
+
+        if False:
+            xmin = (u.min() - cx) / fx
+            xmax = (u.max() - cx) / fx
+            ymin = (v.min() - cy) / fy
+            ymax = (v.max() - cy) / fy
+
+            Rxmin = x_y_z_R[0, :].min()
+            Rxmax = x_y_z_R[0, :].max()
+            Rymin = x_y_z_R[1, :].min()
+            Rymax = x_y_z_R[1, :].max()
+            Rzmin = x_y_z_R[2, :].min()
+            Rzmax = x_y_z_R[2, :].max()
+
+            # z1 = (Rxmax - Rxmin) / (xmax - xmin)
+            # z2 = (Rymax - Rymin) / (ymax - ymin)
+            #xt = (xmax*xmin) /(ymax*xmin-ymin*xmax) * (ymin*Rxmin/xmin - ymax*Rxmax/ymin - Rymin)
+            xt = (Rxmax * xmin - Rxmin * xmax) / (xmax-xmin)
+            yt = (Rymax * ymin - Rymin * ymax) / (ymax-ymin)
+
+            ztxmin = (xt + Rxmin) /xmin - Rzmin
+            ztxmax = (xt + Rxmax) / xmax - Rzmin
+            ztymin = (yt + Rymin) / ymin - Rzmin
+            ztymax = (yt + Rymax) / ymax - Rzmin
+
+            pred_pose = np.array([xt, yt, ztymin])
+            dis_trans = np.linalg.norm(pred_pose - pose[3:])
+
+            pred_pose = np.array([xt, yt, ztxmin])
+            dis_trans = np.linalg.norm(pred_pose - pose[3:])
+
 
     def findCarModels(self, image_name):
         """accumuate the areas of cars in an image

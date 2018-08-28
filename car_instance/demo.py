@@ -12,8 +12,8 @@ Setting = namedtuple('Setting', ['image_name', 'data_dir'])
 
 set_name = 'train'   #['train', 'val']
 # You need to specify the dataset dir
-dataset_dir = '/media/samsumg_1tb/ApolloScape/ECCV2018_apollo/train/'
-#dataset_dir = '/media/samsumg_1tb/ApolloScape/ECCV2018_apollo/3d_car_instance_sample/'
+#dataset_dir = '/media/samsumg_1tb/ApolloScape/ECCV2018_apollo/train/'
+dataset_dir = '/media/SSD_1TB/ApolloScape/ECCV2018_apollo/train/'
 
 img_list = [line.rstrip('\n')[:-4] for line in open(os.path.join(dataset_dir, 'split', set_name + '.txt'))]
 save_dir = os.path.join(dataset_dir, 'Mesh_overlay')
@@ -52,7 +52,7 @@ if False:
     #    25.85,  8.63,  6.49,  4.13,  2.6 ,  6.3 , 10.84]
 
 ### Collect Pose statistics ###
-if True:
+if False:
     poses = []
     for img in tqdm(img_list):
         setting = Setting(img, dataset_dir)
@@ -104,4 +104,15 @@ if False:
         visualizer.set_dataset(setting)
         merged_image = visualizer.showAnn(setting.image_name, set_name, save_dir)
 
+### Translation finding via 2d to 3D
+if True:
+    dis_trans_all = []
+    for img in tqdm(img_list):
+        setting = Setting(img, dataset_dir)
+        visualizer.set_dataset(setting)
+        dis_trans = visualizer.findTrans(setting.image_name)
+        dis_trans_all.append(np.array(dis_trans))
+        print(np.array(dis_trans).mean())
 
+print(np.hstack(dis_trans_all).mean())
+# 6.20518713885198
